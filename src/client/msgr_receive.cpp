@@ -48,7 +48,7 @@ void osd_messenger_t::read_requests()
             }
             ring_data_t* data = ((ring_data_t*)sqe->user_data);
             data->callback = [this, cl](ring_data_t *data) { handle_read(data->res, cl); };
-            io_uring_prep_recvmsg(sqe, peer_fd, &cl->read_msg, 0);
+            my_uring_prep_recvmsg(sqe, peer_fd, &cl->read_msg, 0);
             if (iothread)
             {
                 iothread->add_sqe(sqe_local);
@@ -140,11 +140,12 @@ void osd_messenger_t::clear_immediate_ops(int peer_fd)
     size_t i = 0, j = 0;
     while (i < set_immediate_ops.size())
     {
-        if (set_immediate_ops[i]->peer_fd == peer_fd)
+        if (set_immediate_ops[i] != NULL && set_immediate_ops[i]->peer_fd == peer_fd)
         {
             delete set_immediate_ops[i];
+            set_immediate_ops[i] = NULL;
         }
-        else
+        else if (set_immediate_ops[i] != NULL)
         {
             if (i != j)
                 set_immediate_ops[j] = set_immediate_ops[i];
@@ -159,6 +160,9 @@ void osd_messenger_t::handle_immediate_ops()
 {
     for (auto op: set_immediate_ops)
     {
+        if (op == NULL)
+            continue;
+
         if (op->op_type == OSD_OP_IN)
         {
             exec_op(op);
